@@ -1,0 +1,206 @@
+-- ============================================
+-- DATABASE: library_system (AUTO-INCREMENT USERS)
+-- Complete Schema with Issue Status Workflow
+-- ============================================
+
+DROP DATABASE IF EXISTS library;
+CREATE DATABASE library CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE library;
+
+-- ============================================
+-- 1) USERS TABLE (AUTO-INCREMENT)
+-- ============================================
+CREATE TABLE users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique numeric user ID',
+    full_name VARCHAR(255) NOT NULL COMMENT 'User full name',
+    email VARCHAR(255) UNIQUE NOT NULL COMMENT 'User email',
+    role ENUM('ADMIN', 'LIBRARIAN', 'MEMBER') NOT NULL DEFAULT 'MEMBER',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_email (email),
+    INDEX idx_role (role)
+) ENGINE=InnoDB COMMENT='User accounts and authentication';
+
+-- ============================================
+-- 2) ROLE_PERMISSIONS TABLE
+-- ============================================
+CREATE TABLE role_permissions (
+    permission_id INT AUTO_INCREMENT PRIMARY KEY,
+    role ENUM('ADMIN', 'LIBRARIAN', 'MEMBER') NOT NULL,
+    permission_key VARCHAR(100) NOT NULL,
+    allowed BOOLEAN DEFAULT TRUE,
+
+    UNIQUE KEY uk_role_permission (role, permission_key),
+    INDEX idx_role (role)
+) ENGINE=InnoDB;
+
+-- ============================================
+-- 3) LIBRARY_POLICIES TABLE (Single Record)
+-- ============================================
+CREATE TABLE library_policies (
+    policy_id INT PRIMARY KEY DEFAULT 1,
+    max_books_per_user INT NOT NULL DEFAULT 5,
+    max_issue_days INT NOT NULL DEFAULT 14,
+    fine_per_day FLOAT NOT NULL DEFAULT 10.0,
+    grace_period_days INT NOT NULL DEFAULT 0,
+    lost_book_penalty_multiplier FLOAT NOT NULL DEFAULT 2.5,
+    max_renewals INT DEFAULT 2,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================
+-- 4) AUTHORS TABLE
+-- ============================================
+CREATE TABLE authors (
+    author_id INT AUTO_INCREMENT PRIMARY KEY,
+    author_name VARCHAR(255) UNIQUE NOT NULL,
+
+    INDEX idx_author_name (author_name)
+) ENGINE=InnoDB;
+
+-- ============================================
+-- 5) CATEGORIES TABLE
+-- ============================================
+CREATE TABLE categories (
+    category_id INT AUTO_INCREMENT PRIMARY KEY,
+    category_name VARCHAR(100) UNIQUE NOT NULL,
+
+    INDEX idx_category_name (category_name)
+) ENGINE=InnoDB;
+
+-- ============================================
+-- 6) BOOKS TABLE
+-- ============================================
+CREATE TABLE books (
+    book_id INT AUTO_INCREMENT PRIMARY KEY,
+    isbn VARCHAR(20) UNIQUE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    author_id INT,
+    category_id INT,
+    publication_year INT,
+    total_copies INT NOT NULL DEFAULT 1,
+    available_copies INT NOT NULL DEFAULT 1,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (author_id) REFERENCES authors(author_id) ON DELETE SET NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(category_id) ON DELETE SET NULL,
+
+    INDEX idx_isbn (isbn),
+    INDEX idx_title (title),
+    INDEX idx_author_id (author_id),
+    INDEX idx_category_id (category_id),
+
+    CHECK (available_copies >= 0 AND available_copies <= total_copies)
+) ENGINE=InnoDB;
+
+-- ============================================
+-- 7) ISSUE_RECORDS TABLE (WITH STATUS)
+-- ============================================
+CREATE TABLE issue_records (
+    issue_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    book_id INT NOT NULL,
+    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    due_date TIMESTAMP NOT NULL,
+    returned_at TIMESTAMP NULL,
+    status ENUM('PENDING', 'APPROVED', 'REJECTED', 'RETURN_REQUESTED', 'RETURNED') 
+        NOT NULL DEFAULT 'PENDING' COMMENT 'Issue workflow status',
+    is_lost BOOLEAN DEFAULT FALSE,
+    is_renewed INT DEFAULT 0,
+    renewal_count INT DEFAULT 0,
+    late_days INT DEFAULT 0,
+    fine_amount FLOAT DEFAULT 0,
+
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE RESTRICT,
+    FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE RESTRICT,
+
+    INDEX idx_user_id (user_id),
+    INDEX idx_book_id (book_id),
+    INDEX idx_due_date (due_date),
+    INDEX idx_returned_at (returned_at),
+    INDEX idx_status (status),
+    INDEX idx_is_lost (is_lost)
+) ENGINE=InnoDB;
+
+-- ============================================
+-- 8) USER_FINES TABLE
+-- ============================================
+CREATE TABLE user_fines (
+    fine_id INT AUTO_INCREMENT PRIMARY KEY,
+    issue_id INT,
+    user_id INT NOT NULL,
+    fine_type ENUM('LATE_RETURN', 'BOOK_LOST') NOT NULL,
+    fine_amount FLOAT NOT NULL,
+    is_paid BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    paid_at TIMESTAMP NULL,
+
+    FOREIGN KEY (issue_id) REFERENCES issue_records(issue_id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE RESTRICT,
+
+    INDEX idx_user_id (user_id),
+    INDEX idx_is_paid (is_paid),
+    INDEX idx_fine_type (fine_type),
+    CHECK (fine_amount > 0)
+) ENGINE=InnoDB;
+
+DROP TABLE IF EXISTS announcements;
+
+CREATE TABLE announcements (
+    announcement_id INT PRIMARY KEY AUTO_INCREMENT,
+    message VARCHAR(500) NOT NULL,
+    announcement_type ENUM('SYSTEM', 'REMINDER', 'FINE_NOTICE') DEFAULT 'SYSTEM',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_created_at ON announcements(created_at DESC);
+
+-- Insert a test announcement
+INSERT INTO announcements (message, announcement_type) 
+VALUES ('Library will be closed tomorrow', 'SYSTEM');
+
+
+-- ============================================
+-- 10) SYSTEM_LOGS TABLE
+-- ============================================
+CREATE TABLE system_logs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    module VARCHAR(100) NOT NULL,
+    operation_type ENUM(
+        'SEARCH', 'INSERT', 'DELETE', 'UPDATE',
+        'AVL_ROTATION', 'HASH_COLLISION', 'TRIE_INSERT',
+        'LOAD', 'PERFORMANCE'
+    ) NOT NULL,
+    detail VARCHAR(1000),
+    execution_time_ms FLOAT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_module (module),
+    INDEX idx_operation_type (operation_type),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB;
+
+-- ============================================
+-- 11) PERFORMANCE_BENCHMARKS TABLE
+-- ============================================
+CREATE TABLE performance_benchmarks (
+    benchmark_id INT AUTO_INCREMENT PRIMARY KEY,
+    operation VARCHAR(100) NOT NULL,
+    dsa_method VARCHAR(50) NOT NULL,
+    execution_time_ms FLOAT NOT NULL,
+    result_count INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_operation (operation),
+    INDEX idx_dsa_method (dsa_method),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB;
+
+-- ============================================
+-- INSERT DEFAULT LIBRARY POLICY
+-- ============================================
+INSERT INTO library_policies (policy_id, max_books_per_user, max_issue_days, fine_per_day, grace_period_days, lost_book_penalty_multiplier, max_renewals)
+VALUES (1, 5, 14, 10.0, 0, 2.5, 2);
+
+-- Database schema complete and ready for data insertion

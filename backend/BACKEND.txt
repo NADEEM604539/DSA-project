@@ -1,0 +1,905 @@
+================================================================================
+DSA LIBRARY MANAGEMENT SYSTEM - BACKEND API DOCUMENTATION
+Version: 1.0 | Date: December 8, 2025
+================================================================================
+
+================================================================================
+1. SERVER INFORMATION
+================================================================================
+
+Server URL: http://127.0.0.1:8000
+Server Status Endpoint: GET http://127.0.0.1:8000/health
+
+Database: MySQL
+Database Host: 127.0.0.1:3306
+Database Name: library
+Database User: root
+
+Authentication: Frontend-handled with Clerk (backend is API-first)
+CORS Enabled: Yes (cross-origin requests allowed)
+Content-Type: application/json
+
+================================================================================
+2. API AUTHENTICATION FLOW
+================================================================================
+
+IMPORTANT: Backend does NOT handle authentication
+- Clerk authentication is handled on the FRONTEND
+- Every API request must include the user_id in the request
+- User role is managed by Clerk and used for authorization checks
+
+Flow:
+1. User logs in via Clerk (frontend)
+2. Frontend receives user_id from Clerk
+3. Frontend includes user_id in API requests
+4. Backend validates user_id against database
+5. Backend returns role-based responses
+
+Authorization Levels:
+- ADMIN: Full access to all endpoints, user/book/policy management
+- LIBRARIAN: Issue/return books, manage fines, view reports
+- MEMBER: Search books, view personal fines/issues, renew books
+
+================================================================================
+3. COMPLETE API ENDPOINTS (50 Total)
+================================================================================
+
+-------------------
+ROOT & HEALTH
+-------------------
+
+GET /
+  Description: Root endpoint, returns API info
+  Response: {
+    "message": "DSA Library System API v1.0",
+    "status": "running",
+    "database": "connected"
+  }
+
+GET /health
+  Description: Health check endpoint
+  Response: {
+    "status": "healthy",
+    "timestamp": "2025-12-08T10:30:00",
+    "database": "connected"
+  }
+
+-------------------
+ADMIN - USER MANAGEMENT (5 endpoints)
+-------------------
+
+GET /admin/users
+  Query Params:
+    - skip: int (default: 0) - Number of records to skip
+    - limit: int (default: 10) - Number of records to return
+  Response: {
+    "users": [
+      {
+        "user_id": "clerk_123",
+        "full_name": "John Doe",
+        "email": "john@example.com",
+        "role": "MEMBER",
+        "created_at": "2025-12-08T10:00:00"
+      }
+    ],
+    "total": 5,
+    "skip": 0,
+    "limit": 10
+  }
+
+POST /admin/users
+  Description: Create a new user
+  Body: {
+    "user_id": "clerk_123",
+    "full_name": "John Doe",
+    "email": "john@example.com",
+    "role": "MEMBER"  // ADMIN, LIBRARIAN, or MEMBER
+  }
+  Response: {
+    "user_id": "clerk_123",
+    "full_name": "John Doe",
+    "email": "john@example.com",
+    "role": "MEMBER",
+    "created_at": "2025-12-08T10:00:00"
+  }
+  Errors:
+    - 409: Email already exists
+    - 400: Invalid role
+
+GET /admin/users/{user_id}
+  Description: Get specific user details
+  Response: User object (same as POST response)
+
+PUT /admin/users/{user_id}
+  Description: Update user information
+  Body: {
+    "full_name": "Jane Doe",  // Optional
+    "email": "jane@example.com",  // Optional
+    "role": "LIBRARIAN"  // Optional
+  }
+  Response: Updated user object
+
+DELETE /admin/users/{user_id}
+  Description: Delete a user
+  Response: {"message": "User deleted successfully"}
+  Errors:
+    - 404: User not found
+
+-------------------
+ADMIN - CATALOG MANAGEMENT (5 endpoints)
+-------------------
+
+GET /admin/authors
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "authors": [
+      {
+        "author_id": 1,
+        "author_name": "J.K. Rowling"
+      }
+    ],
+    "total": 10
+  }
+
+GET /admin/categories
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "categories": [
+      {
+        "category_id": 1,
+        "category_name": "Fiction"
+      }
+    ],
+    "total": 5
+  }
+
+POST /admin/categories
+  Description: Create a new category
+  Body: {
+    "category_name": "Science Fiction"
+  }
+  Response: {
+    "category_id": 2,
+    "category_name": "Science Fiction"
+  }
+
+PUT /admin/categories/{category_id}
+  Description: Update category name
+  Body: {
+    "category_name": "Sci-Fi"
+  }
+  Response: Updated category object
+
+DELETE /admin/categories/{category_id}
+  Description: Delete a category
+  Response: {"message": "Category deleted successfully"}
+
+-------------------
+ADMIN - BOOK MANAGEMENT (8 endpoints)
+-------------------
+
+GET /admin/books
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+    - category: str (optional) - Filter by category name
+    - author: str (optional) - Filter by author name
+  Response: {
+    "books": [
+      {
+        "book_id": 1,
+        "isbn": "9780747532699",
+        "title": "Harry Potter and the Philosopher's Stone",
+        "author_id": 1,
+        "author_name": "J.K. Rowling",
+        "category_id": 1,
+        "category_name": "Fiction",
+        "publication_year": 1997,
+        "total_copies": 5,
+        "available_copies": 3,
+        "added_at": "2025-12-08T10:00:00",
+        "updated_at": "2025-12-08T10:00:00"
+      }
+    ],
+    "total": 10
+  }
+
+POST /admin/books
+  Description: Add a new book to inventory
+  Body: {
+    "isbn": "9780747532699",
+    "title": "Harry Potter",
+    "author_name": "J.K. Rowling",
+    "category_name": "Fiction",
+    "publication_year": 1997,
+    "total_copies": 5
+  }
+  Response: Book object (same as GET response)
+  Errors:
+    - 409: ISBN already exists
+    - 400: Invalid data
+
+PUT /admin/books/{book_id}
+  Description: Update book details
+  Body: {
+    "title": "Updated Title",  // Optional
+    "publication_year": 1998,  // Optional
+    "total_copies": 10  // Optional
+  }
+  Response: Updated book object
+
+POST /admin/books/{book_id}/copies?total_copies=10&available_copies=8
+  Description: Override book copy counts (admin only)
+  Query Params:
+    - total_copies: int - New total copies
+    - available_copies: int - New available copies
+  Response: {
+    "book_id": 1,
+    "total_copies": 10,
+    "available_copies": 8,
+    "message": "Copies updated successfully"
+  }
+
+POST /admin/books/{book_id}/mark-lost
+  Description: Mark a book as lost
+  Response: {
+    "book_id": 1,
+    "message": "Book marked as lost",
+    "total_copies": 5,
+    "available_copies": 2
+  }
+
+DELETE /admin/books/{book_id}
+  Description: Delete a book from inventory
+  Response: {"message": "Book deleted successfully"}
+
+-------------------
+ADMIN - POLICIES & MONITORING (5 endpoints)
+-------------------
+
+GET /admin/policies
+  Description: Get library policies
+  Response: {
+    "policy_id": 1,
+    "max_books_per_user": 3,
+    "max_issue_days": 14,
+    "fine_per_day": 10.0,
+    "grace_period_days": 0,
+    "lost_book_penalty_multiplier": 2.0,
+    "max_renewals": 1,
+    "updated_at": "2025-12-08T10:00:00"
+  }
+
+PUT /admin/policies
+  Description: Update library policies
+  Body: {
+    "max_books_per_user": 5,  // Optional
+    "max_issue_days": 21,  // Optional
+    "fine_per_day": 15.0,  // Optional
+    "grace_period_days": 2,  // Optional
+    "lost_book_penalty_multiplier": 3.0,  // Optional
+    "max_renewals": 2  // Optional
+  }
+  Response: Updated policy object
+
+GET /admin/logs
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "logs": [
+      {
+        "log_id": 1,
+        "module": "services/library.py",
+        "operation_type": "SEARCH",
+        "detail": "Search by title in Trie",
+        "execution_time_ms": 2.5,
+        "created_at": "2025-12-08T10:00:00"
+      }
+    ],
+    "total": 50
+  }
+
+GET /admin/logs/filter
+  Query Params:
+    - operation_type: str (SEARCH, INSERT, UPDATE, DELETE, AVL_ROTATION, etc.)
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: Filtered logs array (same format as GET /admin/logs)
+
+GET /admin/benchmarks
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "benchmarks": [
+      {
+        "benchmark_id": 1,
+        "operation": "search_by_title",
+        "dsa_method": "TRIE",
+        "execution_time_ms": 2.5,
+        "result_count": 5,
+        "created_at": "2025-12-08T10:00:00"
+      }
+    ],
+    "total": 20
+  }
+
+-------------------
+ADMIN - ROLES & PERMISSIONS (2 endpoints)
+-------------------
+
+GET /admin/roles
+  Description: Get all available roles
+  Response: {
+    "roles": ["ADMIN", "LIBRARIAN", "MEMBER"]
+  }
+
+GET /admin/role-permissions
+  Description: Get all role permissions
+  Response: {
+    "permissions": [
+      {
+        "permission_id": 1,
+        "role": "ADMIN",
+        "permission_key": "create_user",
+        "allowed": true
+      }
+    ],
+    "total": 15
+  }
+
+-------------------
+ADMIN - NOTIFICATIONS & FINES (3 endpoints)
+-------------------
+
+GET /admin/notifications
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "notifications": [
+      {
+        "notification_id": 1,
+        "user_id": "clerk_123",
+        "message": "Your book is due tomorrow",
+        "notification_type": "REMINDER",
+        "is_read": false,
+        "created_at": "2025-12-08T10:00:00"
+      }
+    ],
+    "total": 25
+  }
+
+POST /admin/notifications/broadcast
+  Description: Broadcast notification to all users
+  Body: {
+    "message": "Library will be closed tomorrow"
+  }
+  Response: {
+    "message": "Notification broadcasted to all users",
+    "count": 50
+  }
+
+GET /admin/fines
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "fines": [
+      {
+        "fine_id": 1,
+        "issue_id": 5,
+        "user_id": "clerk_123",
+        "fine_type": "LATE_RETURN",
+        "fine_amount": 50.0,
+        "is_paid": false,
+        "created_at": "2025-12-08T10:00:00",
+        "paid_at": null
+      }
+    ],
+    "total": 10
+  }
+
+-------------------
+LIBRARIAN - BOOK OPERATIONS (5 endpoints)
+-------------------
+
+POST /librarian/issue/{user_id}/{book_id}
+  Description: Issue a book to a member
+  Response: {
+    "issue_id": 1,
+    "user_id": "member001",
+    "book_id": 1,
+    "issued_at": "2025-12-08T10:00:00",
+    "due_date": "2025-12-22T10:00:00",
+    "renewal_count": 0,
+    "message": "Book issued successfully"
+  }
+  Errors:
+    - 404: Book not found
+    - 400: User has maximum books borrowed
+    - 400: Book not available
+
+POST /librarian/return/{issue_id}
+  Description: Return a borrowed book
+  Response: {
+    "issue_id": 1,
+    "returned_at": "2025-12-15T10:00:00",
+    "late_days": 0,
+    "fine_amount": 0,
+    "message": "Book returned successfully"
+  }
+
+POST /librarian/lost/{issue_id}
+  Description: Mark a book as lost by member
+  Response: {
+    "issue_id": 1,
+    "is_lost": true,
+    "fine_amount": 25.0,
+    "message": "Book marked as lost, fine issued"
+  }
+
+-------------------
+LIBRARIAN - FINES & REMINDERS (3 endpoints)
+-------------------
+
+GET /librarian/pending-fines
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "pending_fines": [
+      {
+        "fine_id": 1,
+        "user_id": "member001",
+        "fine_type": "LATE_RETURN",
+        "fine_amount": 50.0,
+        "is_paid": false,
+        "created_at": "2025-12-08T10:00:00"
+      }
+    ],
+    "total": 5
+  }
+
+POST /librarian/collect-fine/{fine_id}
+  Description: Mark a fine as paid
+  Response: {
+    "fine_id": 1,
+    "is_paid": true,
+    "paid_at": "2025-12-08T10:30:00",
+    "message": "Fine collected successfully"
+  }
+  Errors:
+    - 404: Fine not found
+
+POST /librarian/reminders
+  Description: Send due date reminders to all members with borrowed books
+  Response: {
+    "reminders_sent": 12,
+    "message": "Reminders sent successfully"
+  }
+
+-------------------
+LIBRARIAN - BOOK MANAGEMENT (4 endpoints)
+-------------------
+
+GET /librarian/books
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: Same as GET /admin/books
+
+POST /librarian/books
+  Description: Add a new book (same as admin)
+  Body: {
+    "isbn": "9780747532699",
+    "title": "Harry Potter",
+    "author_name": "J.K. Rowling",
+    "category_name": "Fiction",
+    "publication_year": 1997,
+    "total_copies": 5
+  }
+  Response: Book object
+
+PUT /librarian/books/{book_id}
+  Description: Update book details
+  Body: {
+    "title": "Updated Title",  // Optional
+    "publication_year": 1998,  // Optional
+    "total_copies": 10  // Optional
+  }
+  Response: Updated book object
+
+DELETE /librarian/books/{book_id}
+  Description: Delete a book from inventory
+  Response: {"message": "Book deleted successfully"}
+
+-------------------
+MEMBER - SEARCH (4 endpoints)
+-------------------
+
+GET /member/search?q=harry
+  Description: Generic search across title, author, ISBN
+  Query Params:
+    - q: str - Search query
+  Response: {
+    "results": [
+      {
+        "book_id": 1,
+        "isbn": "9780747532699",
+        "title": "Harry Potter and the Philosopher's Stone",
+        "author_name": "J.K. Rowling",
+        "category_name": "Fiction",
+        "available_copies": 3,
+        "total_copies": 5
+      }
+    ],
+    "count": 1
+  }
+
+GET /member/search/title/{prefix}
+  Description: Search books by title prefix (using Trie)
+  Response: Results array (same as generic search)
+  Example: /member/search/title/Harry
+
+GET /member/search/author/{prefix}
+  Description: Search books by author prefix
+  Response: Results array
+
+GET /member/search/isbn/{isbn}
+  Description: Search book by exact ISBN
+  Response: {
+    "book": {
+      "book_id": 1,
+      "isbn": "9780747532699",
+      "title": "Harry Potter",
+      "author_name": "J.K. Rowling",
+      "available_copies": 3,
+      "total_copies": 5
+    }
+  }
+  Errors:
+    - 404: Book not found
+
+-------------------
+MEMBER - PERSONAL DATA (5 endpoints)
+-------------------
+
+GET /member/books/{user_id}
+  Description: Get all books available in library (paginated)
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "books": [Book objects],
+    "total": 50
+  }
+
+GET /member/fines/{user_id}
+  Description: Get user's pending fines
+  Response: {
+    "fines": [
+      {
+        "fine_id": 1,
+        "fine_type": "LATE_RETURN",
+        "fine_amount": 50.0,
+        "is_paid": false,
+        "created_at": "2025-12-08T10:00:00"
+      }
+    ],
+    "total_fine": 50.0
+  }
+
+GET /member/my-issues/{user_id}
+  Description: Get user's currently borrowed books
+  Response: {
+    "issues": [
+      {
+        "issue_id": 1,
+        "book_id": 1,
+        "title": "Harry Potter",
+        "author_name": "J.K. Rowling",
+        "issued_at": "2025-12-08T10:00:00",
+        "due_date": "2025-12-22T10:00:00",
+        "days_remaining": 10,
+        "late_days": 0,
+        "renewal_count": 0
+      }
+    ],
+    "total": 2
+  }
+
+GET /member/notifications/{user_id}
+  Description: Get user's notifications
+  Query Params:
+    - skip: int (default: 0)
+    - limit: int (default: 10)
+  Response: {
+    "notifications": [Notification objects],
+    "unread_count": 3
+  }
+
+POST /member/renew/{issue_id}
+  Description: Renew a borrowed book
+  Response: {
+    "issue_id": 1,
+    "new_due_date": "2025-01-05T10:00:00",
+    "renewal_count": 1,
+    "message": "Book renewed successfully"
+  }
+  Errors:
+    - 404: Issue not found
+    - 400: Maximum renewals exceeded
+    - 400: Book is already late
+
+================================================================================
+4. COMMON RESPONSE FORMATS
+================================================================================
+
+Success Response (200, 201):
+{
+  "data": {...},
+  "message": "Operation successful",
+  "timestamp": "2025-12-08T10:00:00"
+}
+
+Error Response (4xx, 5xx):
+{
+  "detail": "Error description",
+  "status_code": 400,
+  "timestamp": "2025-12-08T10:00:00"
+}
+
+Validation Error (422):
+{
+  "detail": [
+    {
+      "loc": ["body", "email"],
+      "msg": "invalid email format",
+      "type": "value_error.email"
+    }
+  ]
+}
+
+================================================================================
+5. HTTP STATUS CODES
+================================================================================
+
+200 OK               - Request successful
+201 Created          - Resource created successfully
+204 No Content       - Request successful, no content to return
+400 Bad Request      - Invalid request data
+401 Unauthorized     - Missing/invalid authentication
+403 Forbidden        - Insufficient permissions
+404 Not Found        - Resource not found
+409 Conflict         - Duplicate resource (email, ISBN, etc.)
+422 Unprocessable    - Validation error
+500 Server Error     - Internal server error
+
+================================================================================
+6. DATA TYPES & VALIDATION
+================================================================================
+
+Strings:
+- user_id: alphanumeric, max 255 chars
+- email: valid email format, max 255 chars
+- title: any string, max 255 chars
+- isbn: format "9780747532699" (10 or 13 digits)
+
+Numbers:
+- book_id, issue_id, user_id (database ID): integer > 0
+- total_copies, available_copies: integer >= 0
+- fine_amount: float >= 0
+- publication_year: integer > 0
+
+Enums:
+- role: "ADMIN" | "LIBRARIAN" | "MEMBER"
+- fine_type: "LATE_RETURN" | "BOOK_LOST"
+- notification_type: "REMINDER" | "FINE_NOTICE" | "SYSTEM"
+- operation_type: "SEARCH" | "INSERT" | "UPDATE" | "DELETE" | "AVL_ROTATION" | "HASH_COLLISION" | "TRIE_INSERT" | "LOAD" | "PERFORMANCE"
+
+Dates:
+- ISO 8601 format: "2025-12-08T10:00:00"
+- Timezone: UTC
+
+================================================================================
+7. FRONTEND INTEGRATION CHECKLIST
+================================================================================
+
+Authentication:
+[ ] Set up Clerk authentication on frontend
+[ ] Obtain user_id from Clerk after login
+[ ] Store user_id in frontend state/storage
+[ ] Include user_id in all API requests
+
+API Integration:
+[ ] Set API base URL to http://127.0.0.1:8000
+[ ] Set Content-Type header to application/json
+[ ] Implement error handling for all endpoints
+[ ] Add loading states during API calls
+
+User Management:
+[ ] Create user profile after Clerk signup
+[ ] Display user role-based UI
+[ ] Implement role-based access control
+
+Books & Search:
+[ ] Implement search functionality (generic, title, author, ISBN)
+[ ] Display book availability
+[ ] Show book details
+
+Borrowing Features:
+[ ] Implement issue request flow (librarian approval)
+[ ] Show borrowed books list
+[ ] Implement return request
+[ ] Handle book renewal
+[ ] Show due dates and late fees
+
+Admin Dashboard:
+[ ] User management interface
+[ ] Book inventory management
+[ ] Policy configuration
+[ ] Fine collection system
+[ ] System logs and benchmarks
+
+Librarian Portal:
+[ ] Book issue/return interface
+[ ] Fine collection
+[ ] Member notifications
+[ ] Due date reminders
+
+Member Portal:
+[ ] Book search and browsing
+[ ] My borrowed books
+[ ] Fine payment
+[ ] Notification center
+
+================================================================================
+8. EXAMPLE API CALLS (JavaScript/Fetch)
+================================================================================
+
+// Get all books
+fetch('http://127.0.0.1:8000/admin/books', {
+  method: 'GET',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// Create a user
+fetch('http://127.0.0.1:8000/admin/users', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    user_id: 'clerk_123',
+    full_name: 'John Doe',
+    email: 'john@example.com',
+    role: 'MEMBER'
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// Issue a book
+fetch('http://127.0.0.1:8000/librarian/issue/member001/1', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// Search books
+fetch('http://127.0.0.1:8000/member/search?q=harry', {
+  method: 'GET',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+================================================================================
+9. BACKEND FEATURES
+================================================================================
+
+Data Structures Algorithm (DSA) Integration:
+✓ AVL Tree - Used for date-based issue record ordering (efficient range queries)
+✓ Hash Table - Used for book lookup by ISBN (O(1) average search)
+✓ Trie - Used for book title prefix search (efficient autocomplete)
+
+DSA Operations:
+- Search operations automatically logged with execution times
+- Performance benchmarks recorded for all searches
+- AVL rotations logged when balancing occurs
+- Collision handling logged in hash table operations
+
+Database Features:
+✓ 11 tables with proper relationships
+✓ Foreign key constraints
+✓ Indexes on frequently searched columns
+✓ Timestamp tracking (created_at, updated_at)
+✓ Soft delete support via flags
+
+Authorization:
+✓ Role-based access control (RBAC)
+✓ Three roles: ADMIN, LIBRARIAN, MEMBER
+✓ Endpoint-level permission checks
+✓ Resource ownership validation
+
+Audit & Monitoring:
+✓ Complete system logs
+✓ Performance benchmarks
+✓ Operation tracking
+✓ Execution time measurements
+
+================================================================================
+10. TROUBLESHOOTING
+================================================================================
+
+Issue: 404 - Endpoint not found
+Solution: Check endpoint URL spelling and HTTP method (GET, POST, PUT, DELETE)
+
+Issue: 409 - Conflict (duplicate resource)
+Solution: Check if email or ISBN already exists in database
+
+Issue: 400 - Bad Request
+Solution: Validate request body format, check required fields, verify data types
+
+Issue: 422 - Validation Error
+Solution: Check field types and formats, ensure all required fields are present
+
+Issue: 403 - Forbidden (insufficient permissions)
+Solution: Verify user role has access to this endpoint
+
+Issue: 500 - Server Error
+Solution: Check server logs, verify database connection, restart server if needed
+
+Server Connection Issues:
+- Verify MySQL is running (127.0.0.1:3306)
+- Check database credentials in .env file
+- Verify database name is "library"
+
+================================================================================
+11. DATABASE SCHEMA SUMMARY
+================================================================================
+
+Tables: 11
+- users (5 fields)
+- role_permissions (4 fields)
+- library_policies (8 fields)
+- authors (2 fields)
+- categories (2 fields)
+- books (10 fields)
+- issue_records (11 fields)
+- user_fines (8 fields)
+- notifications (6 fields)
+- system_logs (6 fields)
+- performance_benchmarks (6 fields)
+
+Relationships:
+- users → role_permissions (via role)
+- users → issue_records (one-to-many)
+- users → user_fines (one-to-many)
+- users → notifications (one-to-many)
+- books → issue_records (one-to-many)
+- authors → books (one-to-many)
+- categories → books (one-to-many)
+- issue_records → user_fines (one-to-many)
+
+Indexes: 30+
+- email, role, author_name, category_name, isbn, title, user_id, book_id, etc.
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
